@@ -1,0 +1,54 @@
+{
+  "name": "@stevensmex05/ts-api-client",
+  "version": "0.1.0",
+  "description": "Reusable TypeScript API client with Axios, auth refresh, retry, normalized errors and CRUD helpers.",
+  "type": "module",
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "require": "./dist/index.cjs"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "sideEffects": false,
+  "scripts": {
+    "dev": "tsdown --watch",
+    "build": "tsdown",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
+    "prepack": "npm run typecheck && npm run test && npm run build"
+  },
+  "keywords": [
+    "axios",
+    "api-client",
+    "typescript",
+    "react",
+    "jwt",
+    "crud",
+    "retry"
+  ],
+  "author": "Steven Ritchie",
+  "license": "MIT",
+  "dependencies": {
+    "axios": "^1.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "@vitest/coverage-v8": "^4.0.0",
+    "axios-mock-adapter": "^2.0.0",
+    "jsdom": "^27.0.0",
+    "tsdown": "^0.17.0",
+    "typescript": "^5.0.0",
+    "vitest": "^4.0.0"
+  }
+}
