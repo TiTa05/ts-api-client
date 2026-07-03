@@ -16,6 +16,8 @@ It includes:
 - CRUD helper for REST resources
 - Spring Boot pagination support
 - Idempotency-Key support for safe POST/PATCH retries
+- Absolute URL blocking by default
+- Cross-origin Bearer token protection
 
 ---
 
@@ -519,6 +521,31 @@ Available options:
 | `retry` | Enable or disable retry for this request |
 | `retryUnsafe` | Allow retry on POST/PATCH |
 | `idempotencyKey` | Add `Idempotency-Key` header |
+| `allowAbsoluteUrls` | Allow this request to use an absolute URL |
+
+---
+
+## Absolute URLs And Token Safety
+
+By default, requests must use relative paths such as `/products`.
+
+Absolute URLs such as `https://other-api.example.com/products` are blocked by
+default. This prevents accidentally sending authenticated API calls outside the
+configured `baseURL`.
+
+If you really need an absolute URL, enable it explicitly:
+
+```ts
+await apiClient.get('https://files.example.com/download', {
+  allowAbsoluteUrls: true,
+  skipAuth: true
+});
+```
+
+Even when absolute URLs are allowed, the client only injects the Bearer token
+for the same origin as `baseURL` by default. For a different origin, prefer a
+separate client instance. If you intentionally need to send the Bearer token to
+another origin, set `allowCrossOriginAuth: true` globally.
 
 ---
 
@@ -680,6 +707,8 @@ export const apiClient = createApiClient({
   idempotentMethods: ['GET', 'HEAD', 'OPTIONS', 'PUT', 'DELETE'],
 
   withCredentials: true,
+  allowAbsoluteUrls: false,
+  allowCrossOriginAuth: false,
 
   logger: console,
 
@@ -706,29 +735,29 @@ In your React app:
 
 ```txt
 src/
-├── api/
-│   ├── client.ts
-│   ├── auth.api.ts
-│   ├── product.api.ts
-│   ├── sales.api.ts
-│   └── transfer.api.ts
-│
-├── store/
-│   └── auth.store.ts
-│
-├── pages/
-├── components/
-└── App.tsx
+|-- api/
+|   |-- client.ts
+|   |-- auth.api.ts
+|   |-- product.api.ts
+|   |-- sales.api.ts
+|   `-- transfer.api.ts
+|
+|-- store/
+|   `-- auth.store.ts
+|
+|-- pages/
+|-- components/
+`-- App.tsx
 ```
 
 The library stays outside your app:
 
 ```txt
 ts-api-client/
-├── src/
-├── tests/
-├── package.json
-└── README.md
+|-- src/
+|-- test/
+|-- package.json
+`-- README.md
 ```
 
 ---

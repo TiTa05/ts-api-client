@@ -44,7 +44,7 @@ afterEach(() => {
 describe('createCrudApi', () => {
   it('refuse un basePath vide', () => {
     expect(() => createCrudApi<Product>(apiClient, '')).toThrow(
-      'createCrudApi: basePath ne peut pas être vide'
+      'createCrudApi: basePath ne peut pas etre vide'
     );
   });
 
@@ -54,7 +54,7 @@ describe('createCrudApi', () => {
     apiMock.onGet('/products').reply(200, [
       {
         id: 'p1',
-        name: 'Produit 1',
+        name: 'Product 1',
         unitPrice: 1000
       }
     ]);
@@ -64,7 +64,7 @@ describe('createCrudApi', () => {
     expect(result).toEqual([
       {
         id: 'p1',
-        name: 'Produit 1',
+        name: 'Product 1',
         unitPrice: 1000
       }
     ]);
@@ -76,12 +76,12 @@ describe('createCrudApi', () => {
     apiMock.onGet('/products').reply(200, [
       {
         id: 'p1',
-        name: 'Produit 1',
+        name: 'Product 1',
         unitPrice: 1000
       },
       {
         id: 'p2',
-        name: 'Produit 2',
+        name: 'Product 2',
         unitPrice: 2000
       }
     ]);
@@ -91,12 +91,12 @@ describe('createCrudApi', () => {
     expect(result).toEqual([
       {
         id: 'p1',
-        name: 'Produit 1',
+        name: 'Product 1',
         unitPrice: 1000
       },
       {
         id: 'p2',
-        name: 'Produit 2',
+        name: 'Product 2',
         unitPrice: 2000
       }
     ]);
@@ -109,7 +109,7 @@ describe('createCrudApi', () => {
       content: [
         {
           id: 'p1',
-          name: 'Produit 1',
+          name: 'Product 1',
           unitPrice: 1000
         }
       ],
@@ -138,14 +138,14 @@ describe('createCrudApi', () => {
     });
   });
 
-  it('listPage retourne la page complète', async () => {
+  it('listPage retourne la page complete', async () => {
     const productApi = createCrudApi<Product>(apiClient, '/products');
 
     const page: PageResponse<Product> = {
       content: [
         {
           id: 'p1',
-          name: 'Produit 1',
+          name: 'Product 1',
           unitPrice: 1000
         }
       ],
@@ -165,19 +165,19 @@ describe('createCrudApi', () => {
     expect(result).toEqual(page);
   });
 
-  it('listPage échoue si le backend renvoie un simple tableau', async () => {
+  it('listPage echoue si le backend renvoie un simple tableau', async () => {
     const productApi = createCrudApi<Product>(apiClient, '/products');
 
     apiMock.onGet('/products').reply(200, [
       {
         id: 'p1',
-        name: 'Produit 1',
+        name: 'Product 1',
         unitPrice: 1000
       }
     ]);
 
     await expect(productApi.listPage()).rejects.toThrow(
-      'Réponse invalide pour listPage() sur /products'
+      'Reponse invalide pour listPage() sur /products'
     );
   });
 
@@ -186,7 +186,7 @@ describe('createCrudApi', () => {
 
     apiMock.onGet('/products/id%20avec%20espace').reply(200, {
       id: 'id avec espace',
-      name: 'Produit spécial',
+      name: 'Special product',
       unitPrice: 5000
     });
 
@@ -194,7 +194,7 @@ describe('createCrudApi', () => {
 
     expect(result).toEqual({
       id: 'id avec espace',
-      name: 'Produit spécial',
+      name: 'Special product',
       unitPrice: 5000
     });
   });
@@ -215,7 +215,7 @@ describe('createCrudApi', () => {
 
     apiMock.onPost('/products').reply((config) => {
       expect(JSON.parse(config.data)).toEqual({
-        name: 'Produit 1',
+        name: 'Product 1',
         unitPrice: 1000
       });
 
@@ -223,20 +223,20 @@ describe('createCrudApi', () => {
         201,
         {
           id: 'p1',
-          name: 'Produit 1',
+          name: 'Product 1',
           unitPrice: 1000
         }
       ];
     });
 
     const result = await productApi.create({
-      name: 'Produit 1',
+      name: 'Product 1',
       unitPrice: 1000
     });
 
     expect(result).toEqual({
       id: 'p1',
-      name: 'Produit 1',
+      name: 'Product 1',
       unitPrice: 1000
     });
   });
@@ -249,7 +249,7 @@ describe('createCrudApi', () => {
 
     apiMock.onPut('/products/p1').reply((config) => {
       expect(JSON.parse(config.data)).toEqual({
-        name: 'Produit modifié',
+        name: 'Updated product',
         unitPrice: 2000
       });
 
@@ -257,20 +257,20 @@ describe('createCrudApi', () => {
         200,
         {
           id: 'p1',
-          name: 'Produit modifié',
+          name: 'Updated product',
           unitPrice: 2000
         }
       ];
     });
 
     const result = await productApi.update('p1', {
-      name: 'Produit modifié',
+      name: 'Updated product',
       unitPrice: 2000
     });
 
     expect(result).toEqual({
       id: 'p1',
-      name: 'Produit modifié',
+      name: 'Updated product',
       unitPrice: 2000
     });
   });
@@ -290,7 +290,7 @@ describe('createCrudApi', () => {
         200,
         {
           id: 'p1',
-          name: 'Produit 1',
+          name: 'Product 1',
           unitPrice: 3000
         }
       ];
@@ -302,7 +302,7 @@ describe('createCrudApi', () => {
 
     expect(result).toEqual({
       id: 'p1',
-      name: 'Produit 1',
+      name: 'Product 1',
       unitPrice: 3000
     });
   });
@@ -317,7 +317,7 @@ describe('createCrudApi', () => {
     expect(apiMock.history.delete).toHaveLength(1);
   });
 
-  it('transmet la config Axios à list', async () => {
+  it('transmet la config Axios a list', async () => {
     const productApi = createCrudApi<Product>(apiClient, '/products');
 
     apiMock.onGet('/products').reply((config) => {

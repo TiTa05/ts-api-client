@@ -1,357 +1,351 @@
+import axios from 'axios';
 import MockAdapter from 'axios-mock-adapter';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
   createApiClient,
-  createCrudApi,
+  isApiException,
   type ApiClient,
-  type PageResponse
+  type ApiRequestConfig
 } from '../src';
-
-interface Product {
-  id: string;
-  name: string;
-  unitPrice: number;
-}
-
-interface CreateProductDto {
-  name: string;
-  unitPrice: number;
-}
-
-interface UpdateProductDto {
-  name: string;
-  unitPrice: number;
-}
 
 let apiClient: ApiClient;
 let apiMock: MockAdapter;
+let refreshMock: MockAdapter;
+let accessToken: string | null;
 
-beforeEach(() => {
+function getHeader(config: ApiRequestConfig, name: string): string | undefined {
+  const headers = config.headers as
+    | (Record<string, unknown> & { get?: (name: string) => unknown })
+    | undefined;
+
+  const value =
+    headers?.get?.(name) ??
+    headers?.[name] ??
+    headers?.[name.toLowerCase()];
+
+  if (value === null || value === undefined) return undefined;
+  if (Array.isArray(value)) return value.join(',');
+
+  return String(value);
+}
+
+function createClient(options: Partial<Parameters<typeof createApiClient>[0]> = {}) {
+  accessToken = 'initial-token';
+
   apiClient = createApiClient({
-    baseURL: 'http://localhost:8080/api'
+    baseURL: 'http://localhost:8080/api',
+    maxBackoffMs: 0,
+    auth: {
+      getAccessToken: () => accessToken,
+      setAccessToken: (token) => {
+        accessToken = token;
+      },
+      clearAuth: () => {
+        accessToken = null;
+      }
+    },
+    ...options
   });
 
   apiMock = new MockAdapter(apiClient.raw, {
     delayResponse: 0
   });
+}
+
+beforeEach(() => {
+  refreshMock = new MockAdapter(axios, {
+    delayResponse: 0
+  });
+
+  createClient();
 });
 
 afterEach(() => {
   apiMock.restore();
+  refreshMock.restore();
 });
 
-describe('createCrudApi', () => {
-  it('refuse un basePath vide', () => {
-    expect(() => createCrudApi<Product>(apiClient, '')).toThrow(
-      'createCrudApi: basePath ne peut pas être vide'
+describe('createApiClient', () => {
+  it('injecte le Bearer token sur les requetes de meme origine', async () => {
+    apiMock.onGet('/me').reply((config) => [
+      200,
+      {
+        authorization: getHeader(config, 'Authorization')
+      }
+    ]);
+
+    const result = await apiClient.get<{ authorization?: string }>('/me');
+
+    expect(result.authorization).toBe('Bearer initial-token');
+  });
+
+  it('respecte skipAuth', async () => {
+    apiMock.onGet('/public').reply((config) => [
+      200,
+      {
+        authorization: getHeader(config, 'Authorization') ?? null
+      }
+    ]);
+
+    const result = await apiClient.get<{ authorization: string | null }>(
+      '/public',
+      {
+        skipAuth: true
+      }
     );
+
+    expect(result.authorization).toBeNull();
   });
 
-  it('normalise les slashs du basePath', async () => {
-    const productApi = createCrudApi<Product>(apiClient, '/products/');
-
-    apiMock.onGet('/products').reply(200, [
-      {
-        id: 'p1',
-        name: 'Produit 1',
-        unitPrice: 1000
-      }
-    ]);
-
-    const result = await productApi.list();
-
-    expect(result).toEqual([
-      {
-        id: 'p1',
-        name: 'Produit 1',
-        unitPrice: 1000
-      }
-    ]);
+  it('bloque les URLs absolues par defaut', async () => {
+    await expect(
+      apiClient.get('https://files.example.test/download')
+    ).rejects.toMatchObject({
+      message: 'ABSOLUTE_URL_NOT_ALLOWED'
+    });
   });
 
-  it('list retourne directement un tableau si le backend renvoie un tableau', async () => {
-    const productApi = createCrudApi<Product>(apiClient, '/products');
+  it('autorise une URL absolue explicite sans envoyer le token cross-origin', async () => {
+    createClient({
+      allowAbsoluteUrls: true
+    });
 
-    apiMock.onGet('/products').reply(200, [
+    apiMock.onGet('https://files.example.test/download').reply((config) => [
+      200,
       {
-        id: 'p1',
-        name: 'Produit 1',
-        unitPrice: 1000
-      },
-      {
-        id: 'p2',
-        name: 'Produit 2',
-        unitPrice: 2000
+        authorization: getHeader(config, 'Authorization') ?? null
       }
     ]);
 
-    const result = await productApi.list();
+    const result = await apiClient.get<{ authorization: string | null }>(
+      'https://files.example.test/download'
+    );
 
-    expect(result).toEqual([
-      {
-        id: 'p1',
-        name: 'Produit 1',
-        unitPrice: 1000
-      },
-      {
-        id: 'p2',
-        name: 'Produit 2',
-        unitPrice: 2000
-      }
-    ]);
+    expect(result.authorization).toBeNull();
   });
 
-  it('list retourne content si le backend renvoie une pagination Spring', async () => {
-    const productApi = createCrudApi<Product>(apiClient, '/products');
+  it('permet explicitement le Bearer token cross-origin', async () => {
+    createClient({
+      allowAbsoluteUrls: true,
+      allowCrossOriginAuth: true
+    });
 
-    const page: PageResponse<Product> = {
-      content: [
+    apiMock.onGet('https://partner.example.test/resource').reply((config) => [
+      200,
+      {
+        authorization: getHeader(config, 'Authorization')
+      }
+    ]);
+
+    const result = await apiClient.get<{ authorization?: string }>(
+      'https://partner.example.test/resource'
+    );
+
+    expect(result.authorization).toBe('Bearer initial-token');
+  });
+
+  it('refresh le token apres un 401 et relance la requete initiale', async () => {
+    accessToken = 'expired-token';
+
+    apiMock
+      .onGet('/profile')
+      .replyOnce((config) => {
+        expect(getHeader(config, 'Authorization')).toBe('Bearer expired-token');
+        return [401, { message: 'expired' }];
+      })
+      .onGet('/profile')
+      .reply((config) => [
+        200,
         {
-          id: 'p1',
-          name: 'Produit 1',
-          unitPrice: 1000
+          authorization: getHeader(config, 'Authorization')
         }
-      ],
-      totalElements: 1,
-      totalPages: 1,
-      number: 0,
-      size: 20,
-      first: true,
-      last: true,
-      empty: false
-    };
+      ]);
 
-    apiMock.onGet('/products').reply(200, page);
-
-    const result = await productApi.list({
-      page: 0,
-      size: 20,
-      sort: 'createdAt,desc'
+    refreshMock.onPost('/auth/refresh').reply(200, {
+      accessToken: 'fresh-token'
     });
 
-    expect(result).toEqual(page.content);
-    expect(apiMock.history.get[0].params).toEqual({
-      page: 0,
-      size: 20,
-      sort: 'createdAt,desc'
-    });
+    const result = await apiClient.get<{ authorization?: string }>('/profile');
+
+    expect(result.authorization).toBe('Bearer fresh-token');
+    expect(accessToken).toBe('fresh-token');
+    expect(refreshMock.history.post).toHaveLength(1);
   });
 
-  it('listPage retourne la page complète', async () => {
-    const productApi = createCrudApi<Product>(apiClient, '/products');
+  it('partage une seule requete refresh pour plusieurs 401 simultanes', async () => {
+    accessToken = 'expired-token';
+    let protectedAttempts = 0;
+    let refreshCalls = 0;
 
-    const page: PageResponse<Product> = {
-      content: [
-        {
-          id: 'p1',
-          name: 'Produit 1',
-          unitPrice: 1000
-        }
-      ],
-      totalElements: 1,
-      totalPages: 1,
-      number: 0,
-      size: 20
-    };
+    apiMock.onGet('/profile').reply((config) => {
+      protectedAttempts += 1;
 
-    apiMock.onGet('/products').reply(200, page);
-
-    const result = await productApi.listPage({
-      page: 0,
-      size: 20
-    });
-
-    expect(result).toEqual(page);
-  });
-
-  it('listPage échoue si le backend renvoie un simple tableau', async () => {
-    const productApi = createCrudApi<Product>(apiClient, '/products');
-
-    apiMock.onGet('/products').reply(200, [
-      {
-        id: 'p1',
-        name: 'Produit 1',
-        unitPrice: 1000
+      if (protectedAttempts <= 2) {
+        return [401, { message: 'expired' }];
       }
-    ]);
-
-    await expect(productApi.listPage()).rejects.toThrow(
-      'Réponse invalide pour listPage() sur /products'
-    );
-  });
-
-  it('getById encode correctement les IDs', async () => {
-    const productApi = createCrudApi<Product>(apiClient, '/products');
-
-    apiMock.onGet('/products/id%20avec%20espace').reply(200, {
-      id: 'id avec espace',
-      name: 'Produit spécial',
-      unitPrice: 5000
-    });
-
-    const result = await productApi.getById('id avec espace');
-
-    expect(result).toEqual({
-      id: 'id avec espace',
-      name: 'Produit spécial',
-      unitPrice: 5000
-    });
-  });
-
-  it('getById refuse un ID vide', async () => {
-    const productApi = createCrudApi<Product>(apiClient, '/products');
-
-    await expect(productApi.getById('')).rejects.toThrow(
-      'createCrudApi: id invalide'
-    );
-  });
-
-  it('create appelle POST sur la collection', async () => {
-    const productApi = createCrudApi<Product, CreateProductDto, UpdateProductDto>(
-      apiClient,
-      '/products'
-    );
-
-    apiMock.onPost('/products').reply((config) => {
-      expect(JSON.parse(config.data)).toEqual({
-        name: 'Produit 1',
-        unitPrice: 1000
-      });
-
-      return [
-        201,
-        {
-          id: 'p1',
-          name: 'Produit 1',
-          unitPrice: 1000
-        }
-      ];
-    });
-
-    const result = await productApi.create({
-      name: 'Produit 1',
-      unitPrice: 1000
-    });
-
-    expect(result).toEqual({
-      id: 'p1',
-      name: 'Produit 1',
-      unitPrice: 1000
-    });
-  });
-
-  it('update appelle PUT sur /resource/:id', async () => {
-    const productApi = createCrudApi<Product, CreateProductDto, UpdateProductDto>(
-      apiClient,
-      '/products'
-    );
-
-    apiMock.onPut('/products/p1').reply((config) => {
-      expect(JSON.parse(config.data)).toEqual({
-        name: 'Produit modifié',
-        unitPrice: 2000
-      });
 
       return [
         200,
         {
-          id: 'p1',
-          name: 'Produit modifié',
-          unitPrice: 2000
+          authorization: getHeader(config, 'Authorization')
         }
       ];
     });
 
-    const result = await productApi.update('p1', {
-      name: 'Produit modifié',
-      unitPrice: 2000
-    });
-
-    expect(result).toEqual({
-      id: 'p1',
-      name: 'Produit modifié',
-      unitPrice: 2000
-    });
-  });
-
-  it('patch appelle PATCH sur /resource/:id', async () => {
-    const productApi = createCrudApi<Product, CreateProductDto, UpdateProductDto>(
-      apiClient,
-      '/products'
+    refreshMock.onPost('/auth/refresh').reply(
+      () =>
+        new Promise((resolve) => {
+          refreshCalls += 1;
+          setTimeout(() => {
+            resolve([200, { accessToken: 'fresh-token' }]);
+          }, 10);
+        })
     );
 
-    apiMock.onPatch('/products/p1').reply((config) => {
-      expect(JSON.parse(config.data)).toEqual({
-        unitPrice: 3000
-      });
+    const [first, second] = await Promise.all([
+      apiClient.get<{ authorization?: string }>('/profile'),
+      apiClient.get<{ authorization?: string }>('/profile')
+    ]);
 
-      return [
-        200,
-        {
-          id: 'p1',
-          name: 'Produit 1',
-          unitPrice: 3000
-        }
-      ];
-    });
-
-    const result = await productApi.patch('p1', {
-      unitPrice: 3000
-    });
-
-    expect(result).toEqual({
-      id: 'p1',
-      name: 'Produit 1',
-      unitPrice: 3000
-    });
+    expect(first.authorization).toBe('Bearer fresh-token');
+    expect(second.authorization).toBe('Bearer fresh-token');
+    expect(refreshCalls).toBe(1);
+    expect(protectedAttempts).toBe(4);
   });
 
-  it('remove appelle DELETE sur /resource/:id', async () => {
-    const productApi = createCrudApi<Product>(apiClient, '/products');
+  it('nettoie la session quand le refresh echoue', async () => {
+    const clearAuth = vi.fn(() => {
+      accessToken = null;
+    });
+    const onAuthExpired = vi.fn();
 
-    apiMock.onDelete('/products/p1').reply(204);
-
-    await expect(productApi.remove('p1')).resolves.toBeUndefined();
-
-    expect(apiMock.history.delete).toHaveLength(1);
-  });
-
-  it('transmet la config Axios à list', async () => {
-    const productApi = createCrudApi<Product>(apiClient, '/products');
-
-    apiMock.onGet('/products').reply((config) => {
-      expect(config.params).toEqual({
-        page: 1,
-        size: 10
-      });
-
-      expect(config.headers?.['X-Test']).toBe('hello');
-
-      return [
-        200,
-        {
-          content: [],
-          totalElements: 0,
-          totalPages: 0,
-          number: 1,
-          size: 10
-        }
-      ];
+    createClient({
+      auth: {
+        getAccessToken: () => accessToken,
+        setAccessToken: (token) => {
+          accessToken = token;
+        },
+        clearAuth,
+        onAuthExpired
+      }
     });
 
-    const result = await productApi.list(
+    apiMock.onGet('/profile').reply(401, {
+      message: 'expired'
+    });
+    refreshMock.onPost('/auth/refresh').reply(401, {
+      message: 'refresh expired'
+    });
+
+    await expect(apiClient.get('/profile')).rejects.toMatchObject({
+      kind: 'auth',
+      status: 401
+    });
+
+    expect(clearAuth).toHaveBeenCalledTimes(1);
+    expect(onAuthExpired).toHaveBeenCalledTimes(1);
+    expect(accessToken).toBeNull();
+  });
+
+  it('retry automatiquement une requete GET temporairement indisponible', async () => {
+    apiMock
+      .onGet('/reports')
+      .replyOnce(503, { message: 'try again' })
+      .onGet('/reports')
+      .reply(200, { ok: true });
+
+    const result = await apiClient.get<{ ok: boolean }>('/reports');
+
+    expect(result).toEqual({ ok: true });
+    expect(apiMock.history.get).toHaveLength(2);
+  });
+
+  it('ne retry pas POST sans idempotencyKey ou retryUnsafe', async () => {
+    apiMock
+      .onPost('/orders')
+      .replyOnce(503, { message: 'try again' })
+      .onPost('/orders')
+      .reply(200, { ok: true });
+
+    await expect(apiClient.post('/orders', { total: 100 })).rejects.toMatchObject({
+      kind: 'server',
+      status: 503
+    });
+
+    expect(apiMock.history.post).toHaveLength(1);
+  });
+
+  it('retry POST quand une idempotencyKey est fournie', async () => {
+    apiMock
+      .onPost('/orders')
+      .replyOnce(503, { message: 'try again' })
+      .onPost('/orders')
+      .reply((config) => [
+        200,
+        {
+          idempotencyKey: getHeader(config, 'Idempotency-Key')
+        }
+      ]);
+
+    const result = await apiClient.post<{ idempotencyKey?: string }>(
+      '/orders',
+      { total: 100 },
       {
-        page: 1,
-        size: 10
-      },
+        idempotencyKey: 'order-123'
+      }
+    );
+
+    expect(result.idempotencyKey).toBe('order-123');
+    expect(apiMock.history.post).toHaveLength(2);
+  });
+
+  it('normalise les erreurs de validation', async () => {
+    apiMock.onPost('/products').reply(422, {
+      message: 'Invalid product',
+      fields: {
+        name: 'Required'
+      }
+    });
+
+    try {
+      await apiClient.post('/products', { name: '' });
+      throw new Error('Expected request to fail');
+    } catch (error) {
+      expect(isApiException(error)).toBe(true);
+
+      if (isApiException(error)) {
+        expect(error.kind).toBe('validation');
+        expect(error.status).toBe(422);
+        expect(error.message).toBe('Invalid product');
+        expect(error.fields).toEqual({
+          name: 'Required'
+        });
+      }
+    }
+  });
+
+  it('supprime Content-Type manuel pour les uploads FormData', async () => {
+    const formData = new FormData();
+    formData.append('file', new Blob(['hello']), 'hello.txt');
+
+    apiMock.onPost('/files').reply((config) => [
+      200,
+      {
+        contentType: getHeader(config, 'Content-Type') ?? null
+      }
+    ]);
+
+    const result = await apiClient.upload<{ contentType: string | null }>(
+      '/files',
+      formData,
       {
         headers: {
-          'X-Test': 'hello'
+          'Content-Type': 'multipart/form-data'
         }
       }
     );
 
-    expect(result).toEqual([]);
+    expect(result.contentType).not.toBe('multipart/form-data');
   });
 });

@@ -8,5 +8,7 @@ export default defineConfig({
   clean: true,
   outDir: 'dist',
   target: 'es2020',
-  external: ['axios']
+  deps: {
+    neverBundle: ['axios']
+  }
 });

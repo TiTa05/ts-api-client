@@ -1,12 +1,12 @@
 import axios, {
   AxiosError,
-  AxiosHeaders,
   AxiosRequestConfig,
   InternalAxiosRequestConfig
 } from 'axios';
 
 import { computeBackoffMs, delay } from './retry';
 import { toApiException } from './errors';
+import { toAxiosHeaders } from './headers';
 
 import type {
   ApiClient,
@@ -30,7 +30,50 @@ const DEFAULT_RETRYABLE_STATUS = [408, 429, 502, 503, 504];
 const DEFAULT_IDEMPOTENT_METHODS = ['GET', 'HEAD', 'OPTIONS', 'PUT', 'DELETE'];
 
 function normalizeBaseUrl(baseURL: string): string {
-  return baseURL.replace(/\/+$/, '');
+  const trimmed = baseURL.trim().replace(/\/+$/, '');
+
+  if (!trimmed) {
+    throw new Error('createApiClient: baseURL must not be empty');
+  }
+
+  return trimmed;
+}
+
+function isAbsoluteUrl(url: string | undefined): boolean {
+  return Boolean(
+    url &&
+      (/^[a-z][a-z\d+\-.]*:\/\//i.test(url) || url.startsWith('//'))
+  );
+}
+
+function getOrigin(url: string | undefined, baseURL: string): string | null {
+  const fallbackOrigin =
+    typeof window !== 'undefined' && window.location?.origin
+      ? window.location.origin
+      : 'http://localhost';
+
+  try {
+    const base = new URL(baseURL, fallbackOrigin);
+    return new URL(url ?? '', base).origin;
+  } catch {
+    return null;
+  }
+}
+
+function isSameApiOrigin(url: string | undefined, baseURL: string): boolean {
+  const baseOrigin = getOrigin(undefined, baseURL);
+  const targetOrigin = getOrigin(url, baseURL);
+
+  return Boolean(baseOrigin && targetOrigin && baseOrigin === targetOrigin);
+}
+
+function assertAbsoluteUrlAllowed(
+  url: string | undefined,
+  allowAbsoluteUrls: boolean
+): void {
+  if (!allowAbsoluteUrls && isAbsoluteUrl(url)) {
+    throw new Error('ABSOLUTE_URL_NOT_ALLOWED');
+  }
 }
 
 function defaultIsOffline(): boolean {
@@ -42,7 +85,7 @@ function setHeader(
   name: string,
   value: string
 ): void {
-  const headers = AxiosHeaders.from(config.headers);
+  const headers = toAxiosHeaders(config.headers);
   headers.set(name, value);
   config.headers = headers;
 }
@@ -95,6 +138,8 @@ export function createApiClient(options: ApiClientOptions): ApiClient {
       method.toUpperCase()
     )
   );
+  const allowAbsoluteUrls = options.allowAbsoluteUrls ?? false;
+  const allowCrossOriginAuth = options.allowCrossOriginAuth ?? false;
 
   const isOffline = options.isOffline ?? defaultIsOffline;
 
@@ -106,6 +151,7 @@ export function createApiClient(options: ApiClientOptions): ApiClient {
     baseURL,
     timeout: requestTimeoutMs,
     withCredentials: options.withCredentials ?? true,
+    allowAbsoluteUrls,
     headers: {
       Accept: 'application/json'
     },
@@ -117,9 +163,17 @@ export function createApiClient(options: ApiClientOptions): ApiClient {
   });
 
   axiosInstance.interceptors.request.use(async (config: InternalApiRequestConfig) => {
+    const requestAllowsAbsoluteUrl =
+      config.allowAbsoluteUrls ?? allowAbsoluteUrls;
+
+    assertAbsoluteUrlAllowed(config.url, requestAllowsAbsoluteUrl);
+
     const token = await options.auth?.getAccessToken?.();
 
-    if (!config.skipAuth && token) {
+    const canAttachAuth =
+      allowCrossOriginAuth || isSameApiOrigin(config.url, baseURL);
+
+    if (!config.skipAuth && token && canAttachAuth) {
       setHeader(config, 'Authorization', `Bearer ${token}`);
     }
 
@@ -142,6 +196,10 @@ export function createApiClient(options: ApiClientOptions): ApiClient {
     const url = refreshConfig?.url ?? '/auth/refresh';
     const method = refreshConfig?.method ?? 'POST';
     const body = await refreshConfig?.getBody?.();
+    const refreshAllowsAbsoluteUrl =
+      refreshConfig?.allowAbsoluteUrls ?? allowAbsoluteUrls;
+
+    assertAbsoluteUrlAllowed(url, refreshAllowsAbsoluteUrl);
 
     const response = await axios.request({
       baseURL,
@@ -150,6 +208,7 @@ export function createApiClient(options: ApiClientOptions): ApiClient {
       data: body,
       timeout: refreshConfig?.timeoutMs ?? refreshTimeoutMs,
       withCredentials: options.withCredentials ?? true,
+      allowAbsoluteUrls: refreshAllowsAbsoluteUrl,
       headers: {
         Accept: 'application/json',
         ...refreshConfig?.headers
@@ -322,7 +381,7 @@ export function createApiClient(options: ApiClientOptions): ApiClient {
     ): Promise<T> => {
       const { onProgress, headers, ...restConfig } = config ?? {};
 
-      const cleanHeaders = AxiosHeaders.from(headers);
+      const cleanHeaders = toAxiosHeaders(headers);
 
       cleanHeaders.delete('Content-Type');
       cleanHeaders.delete('content-type');

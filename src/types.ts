@@ -53,6 +53,7 @@ export interface ApiRefreshConfig {
   url?: string;
   method?: 'POST' | 'GET';
   timeoutMs?: number;
+  allowAbsoluteUrls?: boolean;
   headers?: Record<string, string>;
   getBody?: () => unknown | Promise<unknown>;
   mapResponse?: (data: unknown) => RefreshResult;
@@ -78,6 +79,8 @@ export interface ApiClientOptions {
   idempotentMethods?: string[];
 
   withCredentials?: boolean;
+  allowAbsoluteUrls?: boolean;
+  allowCrossOriginAuth?: boolean;
 
   auth?: ApiAuthAdapter;
   refresh?: ApiRefreshConfig;

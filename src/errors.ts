@@ -96,7 +96,7 @@ export function normalizeError(
     return {
       kind: 'cancelled',
       status: 0,
-      message: 'Requête annulée',
+      message: 'Requete annulee',
       raw: error
     };
   }
@@ -108,7 +108,7 @@ export function normalizeError(
       return {
         kind: 'timeout',
         status: 0,
-        message: 'Le serveur met trop de temps à répondre',
+        message: 'Le serveur met trop de temps a repondre',
         raw: error
       };
     }
@@ -120,7 +120,7 @@ export function normalizeError(
         kind: offline ? 'offline' : 'network',
         status: 0,
         message: offline
-          ? 'Vous semblez être hors ligne'
+          ? 'Vous semblez etre hors ligne'
           : 'Impossible de joindre le serveur',
         raw: error
       };
@@ -135,6 +135,15 @@ export function normalizeError(
       message: extractMessage(data, 'Une erreur est survenue'),
       fields: extractFields(data),
       raw: data
+    };
+  }
+
+  if (error instanceof Error) {
+    return {
+      kind: 'unknown',
+      status: 0,
+      message: error.message || 'Erreur inconnue',
+      raw: error
     };
   }
 

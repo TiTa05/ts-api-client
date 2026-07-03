@@ -15,5 +15,5 @@
     "allowSyntheticDefaultImports": true,
     "types": ["vitest/globals", "node"]
   },
-  "include": ["src", "tests", "vitest.config.ts", "tsdown.config.ts"]
+  "include": ["src", "test", "vitest.config.ts", "tsdown.config.ts"]
 }

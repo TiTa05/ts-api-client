@@ -1,7 +1,10 @@
-import axios, { AxiosError, AxiosHeaders } from 'axios';
+import axios, { AxiosError } from 'axios';
+import type { GenericAbortSignal } from 'axios';
+
+import { toAxiosHeaders } from './headers';
 
 export function getResponseHeader(error: AxiosError, name: string): string | undefined {
-  const headers = AxiosHeaders.from(error.response?.headers);
+  const headers = toAxiosHeaders(error.response?.headers);
   const value = headers.get(name);
 
   if (value === null || value === undefined) return undefined;
@@ -46,9 +49,9 @@ export function computeBackoffMs(
   return Math.min(exponential + jitter, maxBackoffMs);
 }
 
-export function delay(ms: number, signal?: AbortSignal): Promise<void> {
+export function delay(ms: number, signal?: GenericAbortSignal): Promise<void> {
   if (signal?.aborted) {
-    return Promise.reject(new axios.CanceledError('Requête annulée pendant le retry'));
+    return Promise.reject(new axios.CanceledError('Requete annulee pendant le retry'));
   }
 
   return new Promise((resolve, reject) => {
@@ -60,13 +63,13 @@ export function delay(ms: number, signal?: AbortSignal): Promise<void> {
     const onAbort = () => {
       globalThis.clearTimeout(timer);
       cleanup();
-      reject(new axios.CanceledError('Requête annulée pendant le retry'));
+      reject(new axios.CanceledError('Requete annulee pendant le retry'));
     };
 
     const cleanup = () => {
-      signal?.removeEventListener('abort', onAbort);
+      signal?.removeEventListener?.('abort', onAbort);
     };
 
-    signal?.addEventListener('abort', onAbort, { once: true });
+    signal?.addEventListener?.('abort', onAbort, { once: true });
   });
 }

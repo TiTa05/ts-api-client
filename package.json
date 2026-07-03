@@ -4,14 +4,20 @@
   "description": "Reusable TypeScript API client with Axios, auth refresh, retry, normalized errors and CRUD helpers.",
   "type": "module",
   "main": "./dist/index.cjs",
-  "module": "./dist/index.js",
-  "types": "./dist/index.d.ts",
+  "module": "./dist/index.mjs",
+  "types": "./dist/index.d.mts",
   "exports": {
     ".": {
-      "types": "./dist/index.d.ts",
-      "import": "./dist/index.js",
-      "require": "./dist/index.cjs"
-    }
+      "import": {
+        "types": "./dist/index.d.mts",
+        "default": "./dist/index.mjs"
+      },
+      "require": {
+        "types": "./dist/index.d.cts",
+        "default": "./dist/index.cjs"
+      }
+    },
+    "./package.json": "./package.json"
   },
   "files": [
     "dist",
@@ -19,6 +25,12 @@
     "LICENSE"
   ],
   "sideEffects": false,
+  "engines": {
+    "node": ">=18"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
   "scripts": {
     "dev": "tsdown --watch",
     "build": "tsdown",
@@ -26,6 +38,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
+    "validate": "npm run typecheck && npm run test && npm run build",
     "prepack": "npm run typecheck && npm run test && npm run build"
   },
   "keywords": [
@@ -37,18 +50,18 @@
     "crud",
     "retry"
   ],
-  "author": "Steven Ritchie",
+  "author": "Steven Ritchie Rakotonindraina",
   "license": "MIT",
   "dependencies": {
-    "axios": "^1.0.0"
+    "axios": "^1.18.1"
   },
   "devDependencies": {
-    "@types/node": "^24.0.0",
-    "@vitest/coverage-v8": "^4.0.0",
-    "axios-mock-adapter": "^2.0.0",
-    "jsdom": "^27.0.0",
-    "tsdown": "^0.17.0",
-    "typescript": "^5.0.0",
-    "vitest": "^4.0.0"
+    "@types/node": "^24.13.2",
+    "@vitest/coverage-v8": "^4.1.9",
+    "axios-mock-adapter": "^2.1.0",
+    "jsdom": "^27.4.0",
+    "tsdown": "^0.22.3",
+    "typescript": "^5.9.3",
+    "vitest": "^4.1.9"
   }
 }

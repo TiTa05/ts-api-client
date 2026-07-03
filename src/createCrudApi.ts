@@ -11,7 +11,7 @@ function normalizeBasePath(basePath: string): string {
   const trimmed = basePath.trim().replace(/^\/+|\/+$/g, '');
 
   if (!trimmed) {
-    throw new Error('createCrudApi: basePath ne peut pas être vide');
+    throw new Error('createCrudApi: basePath ne peut pas etre vide');
   }
 
   return `/${trimmed}`;
@@ -54,7 +54,7 @@ export function createCrudApi<T, CreateDto = Partial<T>, UpdateDto = Partial<T>>
         return data.content;
       }
 
-      throw new Error(`Réponse invalide pour list() sur ${base}`);
+      throw new Error(`Reponse invalide pour list() sur ${base}`);
     },
 
     listPage: async (params?: ListQueryParams, config?: ApiRequestConfig) => {
@@ -64,7 +64,7 @@ export function createCrudApi<T, CreateDto = Partial<T>, UpdateDto = Partial<T>>
       });
 
       if (!isPageResponse<T>(data)) {
-        throw new Error(`Réponse invalide pour listPage() sur ${base}`);
+        throw new Error(`Reponse invalide pour listPage() sur ${base}`);
       }
 
       return data;
