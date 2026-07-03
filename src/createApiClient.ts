@@ -131,6 +131,7 @@ export function createApiClient(options: ApiClientOptions): ApiClient {
   const refreshTimeoutMs = options.refreshTimeoutMs ?? DEFAULT_REFRESH_TIMEOUT_MS;
   const maxRetries = options.maxRetries ?? DEFAULT_MAX_RETRIES;
   const maxBackoffMs = options.maxBackoffMs ?? DEFAULT_MAX_BACKOFF_MS;
+  const withCredentials = options.withCredentials ?? false;
 
   const retryableStatus = new Set(options.retryableStatus ?? DEFAULT_RETRYABLE_STATUS);
   const idempotentMethods = new Set(
@@ -140,6 +141,8 @@ export function createApiClient(options: ApiClientOptions): ApiClient {
   );
   const allowAbsoluteUrls = options.allowAbsoluteUrls ?? false;
   const allowCrossOriginAuth = options.allowCrossOriginAuth ?? false;
+  const refreshEnabled =
+    options.refresh?.enabled ?? Boolean(options.auth || options.refresh);
 
   const isOffline = options.isOffline ?? defaultIsOffline;
 
@@ -150,7 +153,7 @@ export function createApiClient(options: ApiClientOptions): ApiClient {
   const axiosInstance = axios.create({
     baseURL,
     timeout: requestTimeoutMs,
-    withCredentials: options.withCredentials ?? true,
+    withCredentials,
     allowAbsoluteUrls,
     headers: {
       Accept: 'application/json'
@@ -189,7 +192,7 @@ export function createApiClient(options: ApiClientOptions): ApiClient {
   async function performRefresh(): Promise<string> {
     const refreshConfig = options.refresh;
 
-    if (refreshConfig?.enabled === false) {
+    if (!refreshEnabled) {
       throw new Error('REFRESH_DISABLED');
     }
 
@@ -207,7 +210,7 @@ export function createApiClient(options: ApiClientOptions): ApiClient {
       method,
       data: body,
       timeout: refreshConfig?.timeoutMs ?? refreshTimeoutMs,
-      withCredentials: options.withCredentials ?? true,
+      withCredentials,
       allowAbsoluteUrls: refreshAllowsAbsoluteUrl,
       headers: {
         Accept: 'application/json',
@@ -281,6 +284,7 @@ export function createApiClient(options: ApiClientOptions): ApiClient {
 
       if (
         status === 401 &&
+        refreshEnabled &&
         !originalRequest._retry &&
         !originalRequest.skipRefresh &&
         !isAuthEndpoint(originalRequest.url)

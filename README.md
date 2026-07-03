@@ -74,6 +74,30 @@ const product = await apiClient.post<Product>('/products', {
 
 ---
 
+## Public API Without Auth
+
+For a public API, only provide `baseURL`:
+
+```ts
+export const publicApiClient = createApiClient({
+  baseURL: 'https://api.example.com'
+});
+```
+
+This client will not add an `Authorization` header, will not send cookies by
+default, and will not call `/auth/refresh` after a `401`.
+
+If you want to disable retries too:
+
+```ts
+export const publicApiClient = createApiClient({
+  baseURL: 'https://api.example.com',
+  maxRetries: 0
+});
+```
+
+---
+
 ## Default Configuration
 
 The client has default values:
@@ -83,7 +107,11 @@ requestTimeoutMs = 15000;
 refreshTimeoutMs = 10000;
 maxRetries = 2;
 maxBackoffMs = 10000;
+withCredentials = false;
 ```
+
+Refresh is automatic only when `auth` or `refresh` is configured. A public
+client created with only `baseURL` will not call `/auth/refresh` on `401`.
 
 You can override them:
 
@@ -106,6 +134,7 @@ Meaning:
 | `refreshTimeoutMs` | `10000` | Timeout for the refresh token request |
 | `maxRetries` | `2` | Maximum automatic retries after the first failed request |
 | `maxBackoffMs` | `10000` | Maximum delay before retrying a request |
+| `withCredentials` | `false` | Send cookies and browser credentials |
 
 Example:
 

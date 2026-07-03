@@ -98,6 +98,80 @@ describe('createApiClient', () => {
     expect(result.authorization).toBeNull();
   });
 
+  it('desactive withCredentials par defaut', () => {
+    apiMock.restore();
+
+    apiClient = createApiClient({
+      baseURL: 'http://localhost:8080/api'
+    });
+
+    apiMock = new MockAdapter(apiClient.raw, {
+      delayResponse: 0
+    });
+
+    expect(apiClient.raw.defaults.withCredentials).toBe(false);
+  });
+
+  it('ne tente pas de refresh implicite pour un client public sans auth', async () => {
+    apiMock.restore();
+
+    apiClient = createApiClient({
+      baseURL: 'http://localhost:8080/api',
+      maxBackoffMs: 0
+    });
+
+    apiMock = new MockAdapter(apiClient.raw, {
+      delayResponse: 0
+    });
+
+    apiMock.onGet('/public/protected').reply(401, {
+      message: 'Unauthorized'
+    });
+    refreshMock.onPost('/auth/refresh').reply(200, {
+      accessToken: 'unexpected-token'
+    });
+
+    await expect(apiClient.get('/public/protected')).rejects.toMatchObject({
+      kind: 'auth',
+      status: 401,
+      message: 'Unauthorized'
+    });
+
+    expect(refreshMock.history.post).toHaveLength(0);
+  });
+
+  it('respecte refresh.enabled false meme avec un auth adapter', async () => {
+    const clearAuth = vi.fn();
+    const onAuthExpired = vi.fn();
+
+    createClient({
+      auth: {
+        getAccessToken: () => accessToken,
+        clearAuth,
+        onAuthExpired
+      },
+      refresh: {
+        enabled: false
+      }
+    });
+
+    apiMock.onGet('/profile').reply(401, {
+      message: 'expired'
+    });
+    refreshMock.onPost('/auth/refresh').reply(200, {
+      accessToken: 'unexpected-token'
+    });
+
+    await expect(apiClient.get('/profile')).rejects.toMatchObject({
+      kind: 'auth',
+      status: 401
+    });
+
+    expect(refreshMock.history.post).toHaveLength(0);
+    expect(clearAuth).not.toHaveBeenCalled();
+    expect(onAuthExpired).not.toHaveBeenCalled();
+  });
+
   it('bloque les URLs absolues par defaut', async () => {
     await expect(
       apiClient.get('https://files.example.test/download')
