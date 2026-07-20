@@ -1,5 +1,5 @@
 {
-  "name": "@stevensmex05/ts-api-client",
+  "name": "@steven_ritchie/ts-api-client",
   "version": "0.1.0",
   "description": "Reusable TypeScript API client with Axios, auth refresh, retry, normalized errors and CRUD helpers.",
   "type": "module",

@@ -24,7 +24,7 @@ It includes:
 ## Installation
 
 ```bash
-npm install @stevensmex05/ts-api-client
+npm install @steven_ritchie/ts-api-client
 ```
 
 For local development:
@@ -44,7 +44,7 @@ npm pack
 Then in your app:
 
 ```bash
-npm install ../ts-api-client/stevensmex05-ts-api-client-0.1.0.tgz
+npm install ../ts-api-client/steven_ritchie-ts-api-client-0.1.0.tgz
 ```
 
 ---
@@ -54,7 +54,7 @@ npm install ../ts-api-client/stevensmex05-ts-api-client-0.1.0.tgz
 Create an API client:
 
 ```ts
-import { createApiClient } from '@stevensmex05/ts-api-client';
+import { createApiClient } from '@steven_ritchie/ts-api-client';
 
 export const apiClient = createApiClient({
   baseURL: 'http://localhost:8080/api'
@@ -160,7 +160,7 @@ This library does not depend on React, Zustand, Redux, or any framework.
 You provide your own auth adapter:
 
 ```ts
-import { createApiClient } from '@stevensmex05/ts-api-client';
+import { createApiClient } from '@steven_ritchie/ts-api-client';
 import { useAuthStore } from '../store/auth.store';
 
 export const apiClient = createApiClient({
@@ -390,7 +390,7 @@ export function AuthExpiredListener() {
 Create a resource API:
 
 ```ts
-import { createCrudApi } from '@stevensmex05/ts-api-client';
+import { createCrudApi } from '@steven_ritchie/ts-api-client';
 import { apiClient } from './client';
 
 export interface Product {
@@ -636,7 +636,7 @@ The browser must set it automatically with the correct boundary.
 ## AbortController
 
 ```ts
-import { createRequestController } from '@stevensmex05/ts-api-client';
+import { createRequestController } from '@steven_ritchie/ts-api-client';
 
 const controller = createRequestController();
 
@@ -660,7 +660,7 @@ try {
 All API errors are normalized as `ApiException`.
 
 ```ts
-import { isApiException } from '@stevensmex05/ts-api-client';
+import { isApiException } from '@steven_ritchie/ts-api-client';
 
 try {
   await apiClient.get('/admin');
